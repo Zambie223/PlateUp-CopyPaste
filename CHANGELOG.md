@@ -1,0 +1,13 @@
+# Changelog
+
+## 0.1.0 (2026-11-20)
+
+- First version.
+- **Where:** at night, in Advanced Build Mode (the crane).
+- **Copy:** hold the ready-up button (K / Y) with the crane over an appliance.
+- **Paste:** tap it over another appliance of the same type.
+- **Supported settings:** rotating grabber direction, smart grabber filter, and the selected item on providers that switch what they provide. Night-time changes are kept when the day starts.
+- **Clipboards:** one per player, with one slot per appliance type.
+- **Feedback on the host's screen:** "Copied" / "Pasted" popups, and a preview of what a paste would change.
+- **Online:** only the host needs the mod.
+- **Settings:** `CopyPaste.cfg` holds the on/off switch, the hold time, and the popup and preview switches. They can also be changed in-game through Mod List 0.2.0+.

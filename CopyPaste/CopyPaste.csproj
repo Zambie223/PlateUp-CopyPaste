@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Most settings live in ..\Directory.Build.props / .targets. -->
+  <PropertyGroup>
+    <AssemblyName>CopyPaste</AssemblyName>
+    <RootNamespace>CopyPaste</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- Folder name under <game>\Mods\ -->
+    <ModFolderName>CopyPaste</ModFolderName>
+    <!-- Keep "+<git sha>" out of the version string Mod List shows. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- No patches: everything goes through vanilla input and ECS components. -->
+    <UseHarmony>false</UseHarmony>
+  </PropertyGroup>
+</Project>
