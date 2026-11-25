@@ -8,7 +8,7 @@ namespace CopyPaste
     /// In-game options through the Mod List mod (options API v1, Mod List 0.2.0+): Pause → Mods →
     /// the gear on Copy Paste's row. Mod List finds this class by name; there's no reference to it
     /// in either direction, and without Mod List the settings still come from CopyPaste.cfg.
-    /// Only the host's values count (see CopyPasteSettings).
+    /// Enabled and the hold time are the host's; the feedback switches are each player's own.
     /// </summary>
     public static class ModListOptions
     {
@@ -24,7 +24,7 @@ namespace CopyPaste
                     ["id"] = "hold_to_copy_ms",
                     ["type"] = "int",
                     ["label"] = "Hold to copy",
-                    ["description"] = "How long the ready-up button must be held to copy. Shorter presses paste.",
+                    ["description"] = "How long the ready-up button must be held to copy. Shorter presses paste. Only the host's setting counts.",
                     ["min"] = CopyPasteSettings.MinHoldMs,
                     ["max"] = CopyPasteSettings.MaxHoldMs,
                     ["step"] = CopyPasteSettings.HoldMsStep,
@@ -40,7 +40,7 @@ namespace CopyPaste
                 {
                     ["id"] = "heading_feedback",
                     ["type"] = "heading",
-                    ["label"] = "Feedback (host's screen)",
+                    ["label"] = "Feedback (your screen)",
                 },
                 Bool("show_popups", "Popups", "Show \"Copied\", \"Pasted\" and similar labels over the appliance.",
                     () => CopyPasteSettings.ShowPopups, v => CopyPasteSettings.ShowPopups = v),

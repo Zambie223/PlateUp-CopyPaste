@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 (2026-11-25, pre-release)
+
+- **Popups and previews for online players:** each player who has the mod now sees their own "Copied" / "Pasted" popups and paste previews. Before, they only showed on the host's screen. The host needs this version too. Players without the mod are unaffected.
+- **Popup and preview settings** are now each player's own choice. `enabled` and the hold time are still the host's.
+- **Harmony** (Steam Workshop) is now required.
+
 ## 0.1.0 (2026-11-20)
 
 - First version.

@@ -1,3 +1,6 @@
+using System;
+using System.Reflection;
+using HarmonyLib;
 using KitchenMods;
 using UnityEngine;
 
@@ -13,20 +16,44 @@ namespace CopyPaste
     ///   smart grabbers           - item filter (CConveyPushItems.SpecificType/Components)
     ///   switchable providers     - selected item (CVariableProvider.Current)
     ///
-    /// Host only: CopyPasteSystem reads every player's vanilla input (CInputData), which online
-    /// clients already send to the host, so other players don't need the mod. The feedback
-    /// (CopyPasteVisuals) is drawn on the host's screen only.
+    /// How it fits together:
+    ///   Host:          CopyPasteSystem reads every player's vanilla input (CInputData), which
+    ///                  online guests already send to the host, so copy/paste itself needs the
+    ///                  mod on the host only. It sends feedback snapshots (FeedbackChannel).
+    ///   Every machine: the FeedbackChannel patch receives the snapshots and CopyPasteVisuals
+    ///                  draws that machine's own players' popups and previews. Guests without
+    ///                  the mod silently drop the snapshots.
     /// </summary>
     public class ModMain : IModInitializer
     {
         public const string Id = "zambie.copypaste";
         public const string Name = "Copy Paste";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
+
+        private static Harmony _harmony;
 
         public void PostActivate(KitchenMods.Mod mod)
         {
             CopyPasteSettings.Load();
             Log($"v{Version} loaded ({CopyPasteSettings.Describe()})");
+
+            if (_harmony == null)
+            {
+                _harmony = new Harmony(Id);
+                try
+                {
+                    _harmony.PatchAll(typeof(ModMain).Assembly);
+                    foreach (MethodBase method in _harmony.GetPatchedMethods())
+                    {
+                        Log($"Patched {method.DeclaringType?.FullName}.{method.Name}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    // The copy/paste system doesn't depend on the patch; only the feedback does.
+                    LogError($"Couldn't patch the game, so popups and previews won't show: {e}");
+                }
+            }
         }
 
         public void PreInject() { }

@@ -8,14 +8,17 @@ using UnityEngine;
 namespace CopyPaste
 {
     /// <summary>
-    /// Host's screen only: plain Unity objects, never sent over the network, so online players
-    /// without the mod are unaffected (and don't see them). Fed by CopyPasteSystem every frame.
+    /// Draws the feedback on this machine (host or guest) for this machine's own players: plain
+    /// Unity objects, never sent anywhere. Fed by FeedbackChannel with the host's snapshots.
     ///
     ///   Popups   a short label ("Copied", "Pasted", ...) that rises over the appliance and fades.
-    ///   Preview  while a local player's crane is over an appliance of a type they copied, and a
-    ///            paste would change it: a flat arrow for the direction, and/or a small spinning
-    ///            copy of the filter / provided item, the same way vanilla's ConveyItemsView
-    ///            shows a smart grabber's filter.
+    ///   Preview  while one of this machine's players has the crane over an appliance of a type
+    ///            they copied, and a paste would change it: a flat arrow for the direction,
+    ///            and/or a small spinning copy of the filter / provided item, the same way
+    ///            vanilla's ConveyItemsView shows a smart grabber's filter.
+    ///
+    /// Which players are this machine's: CPlayer.InputSource equals this machine's
+    /// InputSourceIdentifier.Identifier (vanilla's PlayerView.IsMyPlayer test).
     ///
     /// Sprites are generated at runtime and drawn with SpriteRenderer, and text uses the game's
     /// own TMP font with Overflow (the body font draws nothing when it doesn't fit), the same
@@ -23,26 +26,6 @@ namespace CopyPaste
     /// </summary>
     internal class CopyPasteVisuals : MonoBehaviour
     {
-        internal struct Preview
-        {
-            public int PlayerId;
-            public Unity.Entities.Entity Target;
-            public Vector3 Position;
-            public Quaternion Rotation;
-            public bool HasDirection;
-            public Orientation Direction;
-            public bool ShowItem;
-            public int Item;
-            public ItemList Components;
-
-            public bool SameLookAs(Preview other)
-            {
-                return Target == other.Target && Position == other.Position && Rotation == other.Rotation
-                    && HasDirection == other.HasDirection && Direction == other.Direction
-                    && ShowItem == other.ShowItem && Item == other.Item && Components.IsEquivalent(other.Components);
-            }
-        }
-
         private class PopupObject
         {
             public Transform Root;
@@ -56,7 +39,7 @@ namespace CopyPaste
 
         private class PreviewObject
         {
-            public Preview Data;
+            public PreviewState Data;
             public GameObject Root;
             public Transform Spinner;
         }
@@ -85,11 +68,15 @@ namespace CopyPaste
         private static bool _loggedError;
 
         /// <summary>
-        /// When CopyPasteSystem last reported. If it stops running (scene change, back to the
-        /// main menu), nothing would clear its previews, so they're dropped after StaleSeconds.
+        /// When the last snapshot arrived. The host resends every 0.5 s while a preview is up;
+        /// if they stop (disconnect, scene change, main menu), previews are dropped after this.
         /// </summary>
         private static float _lastFeed;
-        private const float StaleSeconds = 0.5f;
+        private const float StaleSeconds = 1.5f;
+
+        // Popups already shown, by sequence number, for the host session that numbered them.
+        private static int _nonce;
+        private static int _lastSeq;
 
         private readonly List<PopupObject> _popups = new List<PopupObject>();
         private readonly Dictionary<int, PreviewObject> _previews = new Dictionary<int, PreviewObject>();
@@ -112,20 +99,48 @@ namespace CopyPaste
             }
         }
 
-        public static void Popup(Vector3 position, string text, bool good)
-        {
-            Guard(() => Instance.AddPopup(position, text, good));
-        }
-
-        /// <summary>The previews to show this frame (at most one per player); others are removed.</summary>
-        public static void SetPreviews(List<Preview> previews)
+        /// <summary>A snapshot from the host: every player's previews, and recent popups.</summary>
+        public static void Apply(int nonce, List<PopupEvent> popups, List<PreviewState> previews)
         {
             _lastFeed = Time.unscaledTime;
-            if (previews.Count == 0 && (_instance == null || _instance._previews.Count == 0))
+            int local = Controllers.InputSourceIdentifier.Identifier.Value;
+            if (nonce != _nonce)
+            {
+                _nonce = nonce; // a different host (or a restarted one) numbers popups afresh
+                _lastSeq = 0;
+            }
+            foreach (PopupEvent p in popups)
+            {
+                if (p.Seq <= _lastSeq)
+                {
+                    continue; // shown already (snapshots repeat recent popups)
+                }
+                _lastSeq = p.Seq;
+                // The host only includes popups from the last second, so a guest joining mid-way
+                // sees nothing older than that.
+                if (p.Source == local && CopyPasteSettings.ShowPopups)
+                {
+                    PopupEvent popup = p;
+                    Guard(() => Instance.AddPopup(popup.Position, popup.Text, popup.Good, popup.AgeMs / 1000f));
+                }
+            }
+
+            List<PreviewState> mine = new List<PreviewState>();
+            if (CopyPasteSettings.ShowPreview)
+            {
+                foreach (PreviewState v in previews)
+                {
+                    if (v.Source == local)
+                    {
+                        mine.Add(v);
+                    }
+                }
+            }
+            if (mine.Count == 0 && (_instance == null || _instance._previews.Count == 0))
             {
                 return; // the common case: nothing shown, nothing to show
             }
-            Guard(() => Instance.UpdatePreviews(previews));
+            Guard(() => Instance.UpdatePreviews(mine));
         }
 
         private static void Guard(Action action)
@@ -146,12 +161,13 @@ namespace CopyPaste
 
         // ---- Popups ----
 
-        private void AddPopup(Vector3 position, string text, bool good)
+        private void AddPopup(Vector3 position, string text, bool good, float ageSeconds)
         {
             PopupObject p = new PopupObject
             {
                 Anchor = position + Vector3.up * PopupHeight,
-                Born = Time.unscaledTime,
+                // Started on the host ageSeconds ago (network and batching delay).
+                Born = Time.unscaledTime - Mathf.Clamp(ageSeconds, 0f, PopupSeconds),
                 TextColour = good ? Good : Bad,
                 BackColour = Back,
             };
@@ -222,10 +238,10 @@ namespace CopyPaste
 
         // ---- Previews ----
 
-        private void UpdatePreviews(List<Preview> previews)
+        private void UpdatePreviews(List<PreviewState> previews)
         {
             _wanted.Clear();
-            foreach (Preview preview in previews)
+            foreach (PreviewState preview in previews)
             {
                 _wanted.Add(preview.PlayerId);
                 if (_previews.TryGetValue(preview.PlayerId, out PreviewObject existing))
@@ -253,32 +269,28 @@ namespace CopyPaste
             }
         }
 
-        private PreviewObject BuildPreview(Preview data)
+        private PreviewObject BuildPreview(PreviewState data)
         {
             PreviewObject p = new PreviewObject { Data = data };
             p.Root = new GameObject("CopyPaste Preview");
             p.Root.transform.SetParent(transform, false);
             p.Root.transform.position = data.Position;
 
-            if (data.HasDirection)
+            // The host already turned the grabber's relative direction into a world one.
+            Vector3 world = new Vector3(data.Arrow.x, 0f, data.Arrow.z);
+            if (world.sqrMagnitude > 0.0001f)
             {
-                // Direction is relative to the appliance, as in vanilla (ConveyItemsView moves its
-                // pusher by PushDirection.ToOffset() in the appliance's local space).
-                Vector3 world = data.Rotation * data.Direction.ToOffset();
-                world.y = 0f;
-                if (world.sqrMagnitude > 0.0001f)
-                {
-                    GameObject arrow = new GameObject("Arrow");
-                    arrow.transform.SetParent(p.Root.transform, false);
-                    arrow.transform.localPosition = new Vector3(0f, ArrowHeight, 0f) + world.normalized * 0.15f;
-                    // Lie flat: the sprite's up (+Y) along the push direction, its face pointing up.
-                    arrow.transform.rotation = Quaternion.LookRotation(Vector3.down, world.normalized);
-                    arrow.transform.localScale = Vector3.one * ArrowSize;
-                    SpriteRenderer sr = arrow.AddComponent<SpriteRenderer>();
-                    sr.sprite = Arrow;
-                    sr.color = ArrowColour;
-                    sr.sortingOrder = 99;
-                }
+                world.Normalize();
+                GameObject arrow = new GameObject("Arrow");
+                arrow.transform.SetParent(p.Root.transform, false);
+                arrow.transform.localPosition = new Vector3(0f, ArrowHeight, 0f) + world * 0.15f;
+                // Lie flat: the sprite's up (+Y) along the push direction, its face pointing up.
+                arrow.transform.rotation = Quaternion.LookRotation(Vector3.down, world);
+                arrow.transform.localScale = Vector3.one * ArrowSize;
+                SpriteRenderer sr = arrow.AddComponent<SpriteRenderer>();
+                sr.sprite = Arrow;
+                sr.color = ArrowColour;
+                sr.sortingOrder = 99;
             }
 
             if (data.ShowItem)

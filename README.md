@@ -36,20 +36,20 @@ Both can be turned off in the settings.
 
 - **Needs Advanced Build Mode,** the franchise upgrade that adds the crane. The mod does nothing without it.
 - **Why the ready-up button:** while anyone is in Advanced Build Mode, the base game doesn't count ready-up votes, so the day can't start by accident.
-- **Only the host needs the mod.** Online players without it can copy and paste too, because the game already sends their buttons to the host.
-- **The popups and the preview only show on the host's screen** (including couch co-op players there). Online players see the result: a grabber's arrow or filter icon changes as usual.
-- **[Blueprint Shop](https://github.com/Zambie223/PlateUp-BlueprintShop):** its build queue uses the same button while you carry a queued item. Copy Paste ignores the button while your hands are full, so they don't clash.
+- **Only the host needs the mod to copy and paste.** Online players without it can copy and paste too, because the game already sends their buttons to the host.
+- **To see the popups and the preview, a player needs the mod too** (and the host must have it). Players without it still see the result: a grabber's arrow or filter icon changes as usual. Having the mod or not doesn't affect anyone else's game.
+- **[Blueprint Shop](https://github.com/Zambie223/PlateUp-BlueprintShop):** its build queue uses the same button while you carry a queued item. Copy Paste ignores the button while your hands are full, to keep clear of it.
 
 ## Settings
 
-The settings are in `CopyPaste.cfg`, in the game's data folder (`%USERPROFILE%\AppData\LocalLow\It's Happening\PlateUp\`). If you have the [Mod List](https://github.com/Zambie223/PlateUp-ModList) mod (0.2.0 or later), you can also change them in-game: Pause → Mods → the gear next to Copy Paste. Only the host's settings count.
+The settings are in `CopyPaste.cfg`, in the game's data folder (`%USERPROFILE%\AppData\LocalLow\It's Happening\PlateUp\`). If you have the [Mod List](https://github.com/Zambie223/PlateUp-ModList) mod (0.2.0 or later), you can also change them in-game: Pause → Mods → the gear next to Copy Paste.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `enabled` | `true` | Turns copy and paste on or off. |
-| `hold_to_copy_ms` | `500` | How long the button must be held to copy, from 200 to 2000 ms. Shorter presses paste. |
-| `show_popups` | `true` | Show the "Copied" / "Pasted" labels. |
-| `show_preview` | `true` | Show the preview over a matching appliance before pasting. |
+| `enabled` | `true` | Turns copy and paste on or off. Online, only the host's setting counts. |
+| `hold_to_copy_ms` | `500` | How long the button must be held to copy, from 200 to 2000 ms. Shorter presses paste. Online, only the host's setting counts. |
+| `show_popups` | `true` | Show the "Copied" / "Pasted" labels on your screen. Each player's own choice. |
+| `show_preview` | `true` | Show the preview over a matching appliance on your screen. Each player's own choice. |
 
 ## Install
 
@@ -58,13 +58,14 @@ The settings are in `CopyPaste.cfg`, in the game's data folder (`%USERPROFILE%\A
    - To find the folder in Steam: right-click PlateUp, then Manage, then Browse local files, and open the `PlateUp` folder.
    - Create the `Mods` folder if it doesn't exist.
    - Keep the `.pdb` next to the `.dll`: it adds line numbers to error reports.
-3. **Start the game.** No other mods are required. [Mod List](https://github.com/Zambie223/PlateUp-ModList) 0.2.0+ is optional, for changing the settings in-game.
+3. **Subscribe to Harmony** on the Steam Workshop (id `2898033283`). It's required, and most PlateUp mods already use it.
+4. **Start the game.** [Mod List](https://github.com/Zambie223/PlateUp-ModList) 0.2.0+ is optional, for changing the settings in-game.
 
 **To uninstall,** delete the `Mods\CopyPaste` folder. Settings already pasted stay as they are, since they're ordinary game settings.
 
 ## Building
 
-You need the .NET SDK 8 or newer and PlateUp installed. If PlateUp isn't in the default Steam folder, create `Directory.Build.local.props` next to `Directory.Build.props`, or set the `PLATEUP_GAME_DIR` environment variable (see the comment at the top of `Directory.Build.props`). Then run:
+You need the .NET SDK 8 or newer, PlateUp installed, and the Harmony Workshop item downloaded. If PlateUp isn't in the default Steam folder, create `Directory.Build.local.props` next to `Directory.Build.props`, or set the `PLATEUP_GAME_DIR` environment variable (see the comment at the top of `Directory.Build.props`). Then run:
 
 ```
 dotnet build -c Release
@@ -74,4 +75,4 @@ A successful build copies the mod into the game's `Mods` folder.
 
 ## Responsible AI use disclosure
 
-This mod was written with the help of an AI coding assistant (Anthropic's Claude), working under the author's direction. The design decisions were made by the author. The assistant researched the game's code, wrote the implementation and the documentation, and the author reviewed the results. Testing was done in-game by the author.
+This mod was written with the help of an AI coding assistant (Anthropic's Claude), working under the author's direction. The design decisions were made by the author. The assistant researched the game's code, wrote the implementation and the documentation, and the author reviewed the results. Testing is done in-game by the author. Releases marked as pre-release haven't been fully tested yet.

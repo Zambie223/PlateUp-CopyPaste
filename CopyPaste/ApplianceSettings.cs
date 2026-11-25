@@ -158,18 +158,18 @@ namespace CopyPaste
             return 0;
         }
 
-        /// <summary>Short text for the "Copied" popup.</summary>
-        public string Label()
+        /// <summary>Which "Copied" popup to show.</summary>
+        public FeedbackCode CopiedCode()
         {
             if (HasDirection && !HasFilter && !HasVariable)
             {
-                return "Copied direction";
+                return FeedbackCode.CopiedDirection;
             }
             if (HasFilter && !HasDirection && !HasVariable)
             {
-                return FilterItem == 0 ? "Copied: no filter" : "Copied filter";
+                return FilterItem == 0 ? FeedbackCode.CopiedNoFilter : FeedbackCode.CopiedFilter;
             }
-            return "Copied";
+            return FeedbackCode.Copied;
         }
 
         public string Describe()

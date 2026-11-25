@@ -10,8 +10,8 @@ namespace CopyPaste
     /// edited by hand (read at startup) or changed in-game through Mod List's options page,
     /// which saves it immediately. Mod List isn't required.
     ///
-    /// Only the host's file matters: the host carries out everyone's copy/paste and draws the
-    /// feedback on its own screen.
+    /// enabled and hold_to_copy_ms: only the host's count, since the host carries out everyone's
+    /// copy/paste. show_popups and show_preview: each machine's own, for what it draws.
     /// </summary>
     internal static class CopyPasteSettings
     {
@@ -130,16 +130,17 @@ namespace CopyPaste
                 File.WriteAllText(ConfigPath,
                     "# Copy Paste settings. Edit while the game is closed, or change them in-game with the Mod List mod.\n" +
                     "# In Advanced Build Mode, hold the ready-up button (K / Y) on an appliance to copy its settings,\n" +
-                    "# and tap it on another appliance of the same type to paste them. Only the host's settings count.\n" +
+                    "# and tap it on another appliance of the same type to paste them.\n" +
                     "\n" +
-                    "# On or off (true/false).\n" +
+                    "# On or off (true/false). Online, only the host's setting counts.\n" +
                     $"{KeyEnabled}={B(Enabled)}\n" +
                     "\n" +
                     $"# How long the button must be held to copy, in milliseconds ({MinHoldMs} to {MaxHoldMs}). Shorter presses paste.\n" +
+                    "# Online, only the host's setting counts.\n" +
                     $"{KeyHoldMs}={HoldToCopyMs}\n" +
                     "\n" +
-                    "# Feedback on the host's screen (true/false): labels when copying or pasting, and a preview of\n" +
-                    "# the copied setting over a matching appliance under the crane.\n" +
+                    "# Feedback on this screen (true/false): labels when copying or pasting, and a preview of the\n" +
+                    "# copied setting over a matching appliance under the crane. Each player's own choice.\n" +
                     $"{KeyPopups}={B(ShowPopups)}\n" +
                     $"{KeyPreview}={B(ShowPreview)}\n");
             }

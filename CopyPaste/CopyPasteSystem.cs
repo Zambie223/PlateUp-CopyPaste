@@ -25,6 +25,9 @@ namespace CopyPaste
     /// The target is CAttemptingInteraction.Target, which vanilla's AttemptInteraction (first in
     /// InteractionGroup) recomputes every frame; in crane mode that's the appliance under the
     /// crane (SetCraneStatus sets the interaction offset to 0).
+    ///
+    /// Feedback for every player (popups and previews) goes out through FeedbackChannel as one
+    /// snapshot, to the host's screen and to guests; each machine draws its own players'.
     /// </summary>
     [UpdateInGroup(typeof(InteractionGroup))]
     [UpdateAfter(typeof(AttemptInteraction))]
@@ -38,15 +41,33 @@ namespace CopyPaste
             public bool Done;
         }
 
+        private struct RecentPopup
+        {
+            public PopupEvent Event;
+            public float Born;
+        }
+
+        /// <summary>Popups stay in the snapshot this long, so every send in that time carries them.</summary>
+        private const float PopupKeepSeconds = 1f;
+
+        /// <summary>While a preview is up, resend this often, so receivers can drop a stale one.</summary>
+        private const float HeartbeatSeconds = 0.5f;
+
         // Player ID -> appliance ID -> copied settings. Player IDs stay the same across scene
         // changes, so this lives for the game session.
         private static readonly Dictionary<int, Dictionary<int, ApplianceSettings>> Clipboards =
             new Dictionary<int, Dictionary<int, ApplianceSettings>>();
 
+        private static int _popupSeq;
+
         private readonly Dictionary<int, HoldState> _holds = new Dictionary<int, HoldState>();
         private readonly HashSet<int> _seen = new HashSet<int>();
         private readonly List<int> _gone = new List<int>();
-        private readonly List<CopyPasteVisuals.Preview> _previews = new List<CopyPasteVisuals.Preview>();
+        private readonly List<RecentPopup> _recent = new List<RecentPopup>();
+        private readonly List<PopupEvent> _popups = new List<PopupEvent>();
+        private readonly List<PreviewState> _previews = new List<PreviewState>();
+        private string _lastKey = "";
+        private float _lastSend;
         private EntityQuery _players;
         private bool _loggedError;
 
@@ -58,10 +79,18 @@ namespace CopyPaste
 
         protected override void OnUpdate()
         {
+            // Only the host runs the game. A guest's router is its LocalViewRouter alone; the
+            // host's is a SplitRouter feeding its own screen and the network.
+            IViewRouter router = World.GetExistingSystem<RouterManager>()?.Entrypoint;
+            if (!(router is SplitRouter))
+            {
+                return;
+            }
             _previews.Clear();
             try
             {
                 Run();
+                Publish(router);
             }
             catch (Exception e)
             {
@@ -71,13 +100,11 @@ namespace CopyPaste
                     ModMain.LogError($"Copy/paste failed (logged once): {e}");
                 }
             }
-            CopyPasteVisuals.SetPreviews(_previews);
         }
 
         private void Run()
         {
             float now = UnityEngine.Time.unscaledTime; // real time, like the hold in Blueprint Shop
-            int localSource = InputSourceIdentifier.Identifier.Value;
             _seen.Clear();
             using (NativeArray<Entity> players = _players.ToEntityArray(Allocator.Temp))
             {
@@ -86,8 +113,6 @@ namespace CopyPaste
                     CPlayer info = EntityManager.GetComponentData<CPlayer>(player);
                     CInputData input = EntityManager.GetComponentData<CInputData>(player);
                     _seen.Add(info.ID);
-                    // Feedback only for players at the host's own screen.
-                    bool local = info.InputSource == localSource;
 
                     bool eligible = CopyPasteSettings.Enabled
                         && Has<CIsCraneMode>(player)
@@ -112,22 +137,22 @@ namespace CopyPaste
                         if (!hold.Done && now - hold.Since >= CopyPasteSettings.HoldToCopySeconds)
                         {
                             hold.Done = true;
-                            Copy(player, target, info.ID, local);
+                            Copy(player, target, info);
                         }
                     }
                     else
                     {
                         if (hold.Down && !hold.Done && eligible)
                         {
-                            Paste(player, target, info.ID, local);
+                            Paste(player, target, info);
                         }
                         hold = default;
                     }
                     _holds[info.ID] = hold;
 
-                    if (local && eligible && target != Entity.Null && !hold.Down && CopyPasteSettings.ShowPreview)
+                    if (eligible && target != Entity.Null && !hold.Down)
                     {
-                        AddPreview(info.ID, target);
+                        AddPreview(info, target);
                     }
                 }
             }
@@ -145,6 +170,30 @@ namespace CopyPaste
             {
                 _holds.Remove(id);
             }
+        }
+
+        /// <summary>Sends the snapshot when it changes, and as a heartbeat while a preview is up.</summary>
+        private void Publish(IViewRouter router)
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            _recent.RemoveAll(r => now - r.Born > PopupKeepSeconds);
+            _popups.Clear();
+            foreach (RecentPopup r in _recent)
+            {
+                PopupEvent e = r.Event;
+                e.AgeMs = (int)((now - r.Born) * 1000f);
+                _popups.Add(e);
+            }
+            // Compare without ages, which change every frame.
+            string key = FeedbackChannel.Encode(_popups, _previews, includeAges: false);
+            bool heartbeat = _previews.Count > 0 && now - _lastSend >= HeartbeatSeconds;
+            if (key == _lastKey && !heartbeat)
+            {
+                return;
+            }
+            _lastKey = key;
+            _lastSend = now;
+            FeedbackChannel.Send(router, FeedbackChannel.Encode(_popups, _previews, includeAges: true));
         }
 
         private bool HandsEmpty(Entity player)
@@ -171,52 +220,52 @@ namespace CopyPaste
             return target;
         }
 
-        private void Copy(Entity player, Entity target, int playerId, bool local)
+        private void Copy(Entity player, Entity target, CPlayer info)
         {
             if (target == Entity.Null || !ApplianceSettings.TryCapture(EntityManager, target, out ApplianceSettings settings))
             {
-                Popup(local, player, target, "Nothing to copy", false);
+                Popup(info, player, target, FeedbackCode.NothingToCopy);
                 return;
             }
-            if (!Clipboards.TryGetValue(playerId, out Dictionary<int, ApplianceSettings> clipboard))
+            if (!Clipboards.TryGetValue(info.ID, out Dictionary<int, ApplianceSettings> clipboard))
             {
                 clipboard = new Dictionary<int, ApplianceSettings>();
-                Clipboards[playerId] = clipboard;
+                Clipboards[info.ID] = clipboard;
             }
             clipboard[settings.ApplianceId] = settings;
-            ModMain.Log($"Player {playerId} copied appliance {settings.ApplianceId}: {settings.Describe()}");
-            Popup(local, player, target, settings.Label(), true);
+            ModMain.Log($"Player {info.ID} copied appliance {settings.ApplianceId}: {settings.Describe()}");
+            Popup(info, player, target, settings.CopiedCode());
         }
 
-        private void Paste(Entity player, Entity target, int playerId, bool local)
+        private void Paste(Entity player, Entity target, CPlayer info)
         {
             if (target == Entity.Null)
             {
                 return; // a tap on empty floor: nothing to say
             }
             int applianceId = EntityManager.GetComponentData<CAppliance>(target).ID;
-            if (!Clipboards.TryGetValue(playerId, out Dictionary<int, ApplianceSettings> clipboard)
+            if (!Clipboards.TryGetValue(info.ID, out Dictionary<int, ApplianceSettings> clipboard)
                 || !clipboard.TryGetValue(applianceId, out ApplianceSettings settings))
             {
                 bool configurable = ApplianceSettings.TryCapture(EntityManager, target, out _);
-                Popup(local, player, target, configurable ? "Copy one of these first" : "Nothing to paste here", false);
+                Popup(info, player, target, configurable ? FeedbackCode.CopyFirst : FeedbackCode.NothingToPaste);
                 return;
             }
             if (settings.Apply(EntityManager, target, write: true))
             {
-                ModMain.Log($"Player {playerId} pasted onto appliance {applianceId}: {settings.Describe()}");
-                Popup(local, player, target, "Pasted", true);
+                ModMain.Log($"Player {info.ID} pasted onto appliance {applianceId}: {settings.Describe()}");
+                Popup(info, player, target, FeedbackCode.Pasted);
             }
             else
             {
-                Popup(local, player, target, "Already the same", false);
+                Popup(info, player, target, FeedbackCode.AlreadySame);
             }
         }
 
-        private void AddPreview(int playerId, Entity target)
+        private void AddPreview(CPlayer info, Entity target)
         {
             int applianceId = EntityManager.GetComponentData<CAppliance>(target).ID;
-            if (!Clipboards.TryGetValue(playerId, out Dictionary<int, ApplianceSettings> clipboard)
+            if (!Clipboards.TryGetValue(info.ID, out Dictionary<int, ApplianceSettings> clipboard)
                 || !clipboard.TryGetValue(applianceId, out ApplianceSettings settings)
                 || !settings.Apply(EntityManager, target, write: false)
                 || !EntityManager.HasComponent<CPosition>(target))
@@ -224,33 +273,47 @@ namespace CopyPaste
                 return; // nothing copied for this type, or a paste wouldn't change anything
             }
             CPosition pos = EntityManager.GetComponentData<CPosition>(target);
-            int item = settings.PreviewItem(EntityManager, target, out KitchenData.ItemList components);
-            _previews.Add(new CopyPasteVisuals.Preview
+            Vector3 arrow = Vector3.zero;
+            if (settings.HasDirection)
             {
-                PlayerId = playerId,
-                Target = target,
+                // Direction is relative to the appliance, as in vanilla (ConveyItemsView moves its
+                // pusher by PushDirection.ToOffset() in the appliance's local space).
+                Quaternion rotation = pos.Rotation;
+                arrow = rotation * settings.Direction.ToOffset();
+                arrow.y = 0f;
+                arrow = arrow.sqrMagnitude > 0.0001f ? arrow.normalized : Vector3.zero;
+            }
+            int item = settings.PreviewItem(EntityManager, target, out KitchenData.ItemList components);
+            _previews.Add(new PreviewState
+            {
+                Source = info.InputSource,
+                PlayerId = info.ID,
                 Position = pos.Position,
-                Rotation = pos.Rotation,
-                HasDirection = settings.HasDirection,
-                Direction = settings.Direction,
+                Arrow = arrow,
                 ShowItem = settings.HasFilter || settings.HasVariable,
                 Item = item,
                 Components = components,
             });
         }
 
-        private void Popup(bool local, Entity player, Entity target, string text, bool good)
+        private void Popup(CPlayer info, Entity player, Entity target, FeedbackCode code)
         {
-            if (!local || !CopyPasteSettings.ShowPopups)
-            {
-                return;
-            }
             Entity at = target != Entity.Null && EntityManager.HasComponent<CPosition>(target) ? target : player;
             if (!EntityManager.HasComponent<CPosition>(at))
             {
                 return;
             }
-            CopyPasteVisuals.Popup(EntityManager.GetComponentData<CPosition>(at).Position, text, good);
+            _recent.Add(new RecentPopup
+            {
+                Born = UnityEngine.Time.unscaledTime,
+                Event = new PopupEvent
+                {
+                    Seq = ++_popupSeq,
+                    Source = info.InputSource,
+                    Position = EntityManager.GetComponentData<CPosition>(at).Position,
+                    Code = code,
+                },
+            });
         }
     }
 }
