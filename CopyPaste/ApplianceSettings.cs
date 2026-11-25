@@ -135,6 +135,17 @@ namespace CopyPaste
             return changed;
         }
 
+        /// <summary>Whether pasting would remove a filter the target has now (call before Apply).</summary>
+        public bool ClearsFilter(EntityManager em, Entity target)
+        {
+            if (!HasFilter || FilterItem != 0 || !em.HasComponent<CConveyPushItems>(target))
+            {
+                return false;
+            }
+            CConveyPushItems push = em.GetComponentData<CConveyPushItems>(target);
+            return push.GrabSpecificType && push.SpecificType != 0;
+        }
+
         /// <summary>
         /// The item to show in a preview over the target: the filter, or what the provider would
         /// hand out after a paste. 0 for none.

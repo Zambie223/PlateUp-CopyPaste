@@ -251,8 +251,13 @@ namespace CopyPaste
                 Popup(info, player, target, configurable ? FeedbackCode.CopyFirst : FeedbackCode.NothingToPaste);
                 return;
             }
+            bool clearsFilter = settings.ClearsFilter(EntityManager, target);
             if (settings.Apply(EntityManager, target, write: true))
             {
+                if (clearsFilter)
+                {
+                    RebuildView(target);
+                }
                 ModMain.Log($"Player {info.ID} pasted onto appliance {applianceId}: {settings.Describe()}");
                 Popup(info, player, target, FeedbackCode.Pasted);
             }
@@ -260,6 +265,29 @@ namespace CopyPaste
             {
                 Popup(info, player, target, FeedbackCode.AlreadySame);
             }
+        }
+
+        /// <summary>
+        /// Replaces the appliance's view with a fresh one on every machine, as happens when a
+        /// player picks it up and puts it down. Needed after clearing a filter: vanilla only ever
+        /// sets filters, and ConveyItemsView.UpdateData looks up the new filter's prefab without
+        /// checking for 0, so telling an existing view about 0 throws and leaves the old icon
+        /// there for good. A fresh view starts at 0, so it does no lookup.
+        ///
+        /// These are the two steps vanilla's CleanViews does for CRemoveView, done now instead:
+        /// CleanViews has no ordering against InteractionGroup, so with CRemoveView the old view
+        /// could still be sent the 0 first. Without CLinkedView no view system sends to it, and
+        /// AddNewViews (ViewSystemsGroup, last in the frame) creates the new view.
+        /// </summary>
+        private void RebuildView(Entity appliance)
+        {
+            if (!EntityManager.HasComponent<CLinkedView>(appliance))
+            {
+                return; // already being rebuilt
+            }
+            ViewIdentifier view = EntityManager.GetComponentData<CLinkedView>(appliance).Identifier;
+            Router?.BroadcastUpdate(view, default(DestroyViewData), MessageType.DestroyView);
+            EntityManager.RemoveComponent<CLinkedView>(appliance);
         }
 
         private void AddPreview(CPlayer info, Entity target)

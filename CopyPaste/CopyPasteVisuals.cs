@@ -299,7 +299,14 @@ namespace CopyPaste
                 spinner.transform.SetParent(p.Root.transform, false);
                 spinner.transform.localPosition = new Vector3(0f, ItemHeight, 0f);
                 p.Spinner = spinner.transform;
-                if (data.Item != 0 && GameData.Main != null && GameData.Main.GetPrefab(data.Item) is GameObject prefab)
+                if (data.Item == 0)
+                {
+                    // Pasting an empty filter clears it: say so instead of showing nothing.
+                    AddPreviewLabel(spinner.transform, "No filter");
+                }
+                // Not GetPrefab, which throws for an item this machine doesn't have (from a mod
+                // only the host runs, say); then only the arrow, if any, is shown.
+                else if (GameData.Main != null && GameData.Main.Prefabs.TryGetValue(data.Item, out GameObject prefab) && prefab != null)
                 {
                     GameObject item = Instantiate(prefab, spinner.transform, false);
                     item.transform.localPosition = Vector3.zero;
@@ -319,11 +326,6 @@ namespace CopyPaste
                         c.enabled = false;
                     }
                     item.SetActive(true);
-                }
-                else
-                {
-                    // Pasting an empty filter clears it: say so instead of showing nothing.
-                    AddPreviewLabel(spinner.transform, "No filter");
                 }
             }
             return p;

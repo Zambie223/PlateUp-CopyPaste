@@ -28,7 +28,7 @@ namespace CopyPaste
     {
         public const string Id = "zambie.copypaste";
         public const string Name = "Copy Paste";
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
 
         private static Harmony _harmony;
 

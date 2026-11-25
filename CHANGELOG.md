@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 (2026-11-25, pre-release)
+
+- **Fixed:** pasting "no filter" onto a smart grabber that had a filter caused an error in the game, and the grabber could keep showing the old item.
+- **Fixed:** a paste preview for an item this machine doesn't have (from a mod only the host runs) left stray objects behind.
+
 ## 0.2.0 (2026-11-25, pre-release)
 
 - **Popups and previews for online players:** each player who has the mod now sees their own "Copied" / "Pasted" popups and paste previews. Before, they only showed on the host's screen. The host needs this version too. Players without the mod are unaffected.
