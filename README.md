@@ -75,4 +75,4 @@ A successful build copies the mod into the game's `Mods` folder.
 
 ## Responsible AI use disclosure
 
-This mod was written with the help of an AI coding assistant (Anthropic's Claude), working under the author's direction. The design decisions were made by the author. The assistant researched the game's code, wrote the implementation and the documentation, and the author reviewed the results. Testing is done in-game by the author. Releases marked as pre-release haven't been fully tested yet.
+This mod was written with the help of an AI coding assistant (Anthropic's Claude), working under the author's direction. The design decisions were made by the author. The assistant researched the game's code and wrote the implementation and the documentation. For full releases, the author reviewed the results and tested them in-game. Pre-releases are published for testing, so they may not have been fully reviewed or tested yet.
